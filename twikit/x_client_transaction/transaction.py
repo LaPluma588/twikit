@@ -12,8 +12,15 @@ from .interpolate import interpolate
 from .rotation import convert_rotation_to_matrix
 from .utils import float_to_hex, is_odd, base64_encode, handle_x_migration
 
+# Patched 2026-05-17 (unclecode/twikit fork): X switched their webpack chunk
+# format on 2026-03-18; the old layout had `"ondemand.s":"abc123"` inline,
+# the new layout splits it into a name map (`,123:"ondemand.s"`) and a
+# separate hash map (`,123:"abc123"`). Two-step lookup matches upstream
+# iSarabjitDhiman/XClientTransaction v1.0.2. Refs upstream PRs #410, #411,
+# #416 (all unmerged on d60/twikit).
 ON_DEMAND_FILE_REGEX = re.compile(
-    r"""['|\"]{1}ondemand\.s['|\"]{1}:\s*['|\"]{1}([\w]*)['|\"]{1}""", flags=(re.VERBOSE | re.MULTILINE))
+    r""",(\d+):["']ondemand\.s["']""", flags=(re.VERBOSE | re.MULTILINE))
+ON_DEMAND_HASH_PATTERN = r',{}:"([0-9a-f]+)"'
 INDICES_REGEX = re.compile(
     r"""(\(\w{1}\[(\d{1,2})\],\s*16\))+""", flags=(re.VERBOSE | re.MULTILINE))
 
@@ -39,17 +46,31 @@ class ClientTransaction:
             key_bytes=self.key_bytes, response=self.home_page_response)
 
     async def get_indices(self, home_page_response, session, headers):
+        # Patched 2026-05-17: two-step lookup for X's new webpack chunk format.
+        # 1) find the numeric index where "ondemand.s" appears in the name map
+        # 2) using that index, find the hash in the hash map
+        # 3) build the ondemand.s.<hash>a.js URL and fetch indices from it
         key_byte_indices = []
         response = self.validate_response(
             home_page_response) or self.home_page_response
-        on_demand_file = ON_DEMAND_FILE_REGEX.search(str(response))
-        if on_demand_file:
-            on_demand_file_url = f"https://abs.twimg.com/responsive-web/client-web/ondemand.s.{on_demand_file.group(1)}a.js"
-            on_demand_file_response = await session.request(method="GET", url=on_demand_file_url, headers=headers)
-            key_byte_indices_match = INDICES_REGEX.finditer(
-                str(on_demand_file_response.text))
-            for item in key_byte_indices_match:
-                key_byte_indices.append(item.group(2))
+        body = str(response)
+        idx_match = ON_DEMAND_FILE_REGEX.search(body)
+        if idx_match:
+            chunk_idx = idx_match.group(1)
+            hash_regex = re.compile(ON_DEMAND_HASH_PATTERN.format(chunk_idx))
+            hash_match = hash_regex.search(body)
+            if hash_match:
+                on_demand_file_url = (
+                    "https://abs.twimg.com/responsive-web/client-web/"
+                    f"ondemand.s.{hash_match.group(1)}a.js"
+                )
+                on_demand_file_response = await session.request(
+                    method="GET", url=on_demand_file_url, headers=headers
+                )
+                key_byte_indices_match = INDICES_REGEX.finditer(
+                    str(on_demand_file_response.text))
+                for item in key_byte_indices_match:
+                    key_byte_indices.append(item.group(2))
         if not key_byte_indices:
             raise Exception("Couldn't get KEY_BYTE indices")
         key_byte_indices = list(map(int, key_byte_indices))
