@@ -1,3 +1,39 @@
+> [!IMPORTANT]
+> # Maintained fork of `d60/twikit` with 2026 patches.
+>
+> This fork is a drop-in replacement for `d60/twikit`. It includes patches
+> for issues that have broken upstream since X (formerly Twitter) changed
+> their internal API shape, and that upstream has not merged (maintainer
+> `@d60` has not responded to PRs since Feb 2025).
+>
+> **Install (drop-in)**:
+> ```bash
+> pip install git+https://github.com/unclecode/twikit.git
+> ```
+>
+> **What's patched** (see [CHANGES.md](./CHANGES.md) for full diff history):
+> - **2026-03-18 webpack format**: fixes `Couldn't get KEY_BYTE indices` raised by
+>   `ClientTransaction` after X split their JS chunk metadata into separate
+>   name/hash maps. Two-step regex lookup mirrors upstream
+>   [iSarabjitDhiman/XClientTransaction](https://github.com/iSarabjitDhiman/XClientTransaction) v1.0.2.
+>   Closes upstream issues d60/twikit #408, #409 and supersedes the four open
+>   unmerged upstream PRs #410, #411, #416, #407.
+> - **User payload schema tolerance**: `twikit/user.py` now uses `.get()` with
+>   safe defaults across all `legacy` dict fields. X has been silently dropping
+>   fields (`withheld_in_countries`, `entities.description.urls`,
+>   `fast_followers_count`, etc.) for some payloads, killing entire timeline
+>   fetches with `KeyError`.
+>
+> **Maintenance cadence**: X rotates the JS chunk format and the GraphQL hash
+> map every 2-4 weeks. When a break is detected, the fix is usually a 15-30 min
+> patch following the same pattern. A smoke test runs daily in CI and the
+> repo's Issues tab is the place to report breakage.
+>
+> **All credit for the original library to [@d60](https://github.com/d60)** and
+> to the upstream PR contributors whose work informed these patches.
+>
+> ---
+
 > [!NOTE]
 > https://github.com/d60/twitter_login (under development)
 
