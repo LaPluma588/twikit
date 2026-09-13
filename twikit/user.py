@@ -131,6 +131,8 @@ class User:
         self.translator_type: str = legacy.get('translator_type', 'none')
         self.withheld_in_countries: list[str] = legacy.get('withheld_in_countries', [])
         self.protected: bool = legacy.get('protected', False)
+        self.verified_type:str = legacy.get('verified_type','')
+
 
     @property
     def created_at_datetime(self) -> datetime:
